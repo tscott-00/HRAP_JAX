@@ -13,9 +13,10 @@ dependencies = [
     "jaxlib",
     "numpy",
 	"scipy",
-	"dearpygui",
-	"dearpygui_ext",
+	# "dearpygui",
+	# "dearpygui_ext",
 	"scikit-image",
+	"nicegui",
 ]
 
 requires-python = ">= 3.10"
@@ -31,5 +32,5 @@ description = "HRAP is a versatile tool for simulation of hybrid rocket engines.
 Homepage = "https://github.com/rnickel1/HRAP_Source"
 
 [project.scripts]
-hrap = "hrap.gui.hrap:main"
+hrap = "hrap.gui.main:main"
 #__main__ = "hrap.examples.nitrous_hybrid_gui:main"
