@@ -17,7 +17,7 @@ import numpy as np
 # import dearpygui.dearpygui as dpg
 # both raw webview and nicegui take around 5s to start up...
 # from bottle import Bottle, route, run, static_file
-# import webview
+import webview # TODO: in deps?
 from nicegui import app, ui, native, binding
 
 from jax.scipy.interpolate import RegularGridInterpolator
@@ -34,36 +34,11 @@ from hrap.units   import _in, _ft
 
 hrap_version = version('hrap')
 hrap_root = Path(imp_files('hrap')) # HRAP install root
-html_root = hrap_root/'gui'/'frontend'/'dist' # root for files used in HTML GUI
+# html_root = hrap_root/'gui'/'frontend'/'dist' # root for files used in HTML GUI
 # app = Bottle()
 
 # Globals to be set later
 window = None
-
-# def click_handler(e):
-    # print(e['target'])
-
-# def input_handler(e):
-    # print(e['target']['value'])
-
-# def testing(window):
-    # # result = window.create_confirmation_dialog('Notice', 'Your credit card has been stolen')
-    # # if result:
-        # # print('User clicked OK')
-    # # else:
-        # # print('User clicked Cancel')
-    
-    # # button = window.dom.get_element('#button')
-    # # button.events.click += click_handler
-
-    # # input = window.dom.get_element('#input')
-    # # input.events.input += input_handler
-    # pass
-
-# def load_hrap_html(local_path):
-    # with open(hrap_root/'gui'/'frontend'/'dist'/local_path, mode='rt') as file:
-        # html = file.read()
-    # return html
 
 # TODO:
 # drag and drop? https://pywebview.flowrl.com/examples/drag_drop.html
@@ -98,6 +73,120 @@ class TankSlider(Element, component='Tank.vue'):
     # # def reset(self) -> None:
         # # self.run_method('reset')
 
+
+def landing():
+    # ui.label('Welcome to HRAP! Choose an analysis mode below.')
+    # ui.separator()
+    ui.label('Analysis').classes('text-h6')
+        
+    with ui.row(align_items='center'):
+        for title, desc, mode, thumb_path in [
+            ('Hybrid Engine', 'Self-pressurizing liquid oxidizer, solid fuel', 'hybrid', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
+            ('Liquid Engine', 'Half-Cat-style liquid oxidizer and fuel', 'liquid', hrap_root/'gui'/'thumbnails'/'liquid.jpg'),
+            ('Solid Motor',   'Solid oxidizer and fuel', 'solid', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
+            ('Chemistry',     'Analyze combustion without engine details', 'chem', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
+        ]:
+            with ui.card().tight().classes('w-80'):
+                with ui.image(thumb_path):
+                    with ui.element('div').classes('absolute-bottom text-white p-2'):
+                        ui.label(title).classes('text-h6')
+                        ui.label(desc).classes('text-subtitle2')
+                with ui.card_section():
+                    ui.button('New',    on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
+                    ui.button('Load',   on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
+                    ui.button('Resume', on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
+        # ui.button('Liquid Engine', on_click=lambda: ui.navigate.to('/liquid')).props('flat no-caps')
+        # ui.button('Solid Motor', on_click=lambda: ui.navigate.to('/solid'))
+        # ui.button('Chemistry', on_click=lambda: ui.navigate.to('/chem'))
+    ui.separator()
+    
+    ui.label('Documentation').classes('text-h6')
+    with ui.row(align_items='center'):
+        with ui.card().tight().classes('w-80'):
+            with ui.image(hrap_root/'gui'/'thumbnails'/'hybrid.jpg'):
+                with ui.element('div').classes('absolute-bottom text-white p-2'):
+                    ui.label('Validation Cases').classes('text-h6')
+                    ui.label('Proof of utility double as usage examples').classes('text-subtitle2')
+            with ui.card_section():
+                ui.button('View', on_click=lambda mode=mode: ui.navigate.to('/validation')).props('flat no-caps')
+        with ui.card().tight().classes('w-80'):
+            with ui.image(hrap_root/'gui'/'thumbnails'/'hybrid.jpg'):
+                with ui.element('div').classes('absolute-bottom text-white p-2'):
+                    ui.label('API Documentation').classes('text-h6')
+                    ui.label('Our Python interface is flexible and extensible').classes('text-subtitle2')
+            with ui.card_section():
+                ui.button('View', on_click=lambda mode=mode: ui.navigate.to('/api_docs')).props('flat no-caps')
+                ui.button('Open in Browser', on_click=lambda mode=mode: ui.navigate.to('https://github.com/rnickel1/HRAP_Source', new_tab=True)).props('flat no-caps')
+    ui.separator()
+    
+    ui.label('Settings').classes('text-h6')
+    
+    # ui.label('Your files are preriodically saved')
+    
+    # TODO: autosave, 
+    dark = ui.dark_mode()
+    dark.enable()
+    def on_theme_change(e):
+        match e.value:
+            case 'Dark':
+                dark.enable()
+            case 'Light':
+                dark.disable()
+    theme = ui.toggle(['Dark', 'Light', 'Yellow Babber'], value='Dark', on_change=on_theme_change)
+
+def hybrid():
+    with ui.row(align_items='center'):
+        
+
+        tank_slider = TankSlider('test')
+        # tank_slider.bind_value(tank_value, 'value')
+        # tank_value = ui.number('Tank Value', value=0.5).props('color=blue')#.bind_value(tank_slider, 'value')
+        ui.button('Jiggle', on_click=lambda: tank_slider.run_method('jiggle')).props('outline')
+
+# Open file dialog then save
+async def begin_save():
+    result = await app.native.main_window.create_file_dialog(webview.FileDialog.SAVE, allow_multiple=False, directory='/', save_filename='motor.hrap')
+    if result != None:
+        print('saving', result)
+        file_path = result[0]
+    # print('saving', active_file)
+    # if active_file == None: # Save as
+        # dpg.show_item('save_as')
+    # else:
+        # save_config(active_file)
+
+async def begin_load():
+    result = await app.native.main_window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False, directory='/')
+    if result != None:
+        print('loading', result)
+        file_path = result[0]
+
+def root():
+    # https://nicegui.io/documentation/sub_pages
+    pages = ui.sub_pages()
+    # footer = ui.label()
+    pages.add('/', lambda: landing())
+    pages.add('/hybrid', lambda: hybrid())
+    # pages.add('/other', lambda: other(footer))
+    
+    
+    # https://nicegui.io/documentation/page_layout
+    with ui.header(elevated=True).style('background-color: #3874c8').classes('h-10 gap-0 items-center justify-between'):
+        with ui.row(align_items='center').classes('h-full gap-0 ml-[-14px] mt-[-28px]'): # Negative margins to cancel global page margin, disable gap between children
+            ui.button('Home', on_click=lambda: ui.navigate.to('/')).props('flat no-caps icon="navigation" color="white"')
+            with ui.button('File').props('flat no-caps color="white"'):
+                with ui.menu() as menu:
+                    ui.menu_item('Load', begin_load)
+                    ui.menu_item('Save', begin_save)
+                    # # ui.button('Save As')
+        
+        # with ui.row(align_items='center'):
+            # ui.button('Hybrid Engine', on_click=lambda: ui.navigate.to('/hybrid'))
+            # ui.button('Liquid Engine', on_click=lambda: ui.navigate.to('/liquid'))
+            # ui.button('Solid Motor', on_click=lambda: ui.navigate.to('/solid'))
+            # ui.button('Chemistry', on_click=lambda: ui.navigate.to('/chem'))
+        # ui.button(on_click=lambda: right_drawer.toggle(), icon='menu').props('flat color=white')
+
 # TODO: any way to autosave on reload?
 # Direct call is if ran via "python .\hrap\gui\main.py" instead of "hrap," which enables development features such as auto reload on file change
 def main(is_direct_call=False):
@@ -111,15 +200,13 @@ def main(is_direct_call=False):
     # landing_html = load_hrap_page
     # window = webview.create_window('HRAP', str(hrap_root/'gui'/'frontend'/'dist'/'index.html'))
     
-    with ui.row(align_items='center'):
-        
-
-        tank_slider = TankSlider('test')
-        # tank_slider.bind_value(tank_value, 'value')
-        # tank_value = ui.number('Tank Value', value=0.5).props('color=blue')#.bind_value(tank_slider, 'value')
-        ui.button('Jiggle', on_click=lambda: tank_slider.run_method('jiggle')).props('outline')
+    # https://nicegui.io/documentation/page_layout
     
-    ui.run(reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
+    
+
+    
+    # ui.run(root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
+    ui.run(native=True, port=native.find_open_port(), root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
     # ui.run(native=True, reload=is_direct_call, port=native.find_open_port())
 
 if __name__ in {'__main__', '__mp_main__'}: main(is_direct_call=True)
