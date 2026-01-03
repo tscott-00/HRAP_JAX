@@ -61,7 +61,7 @@ window = None
 from nicegui.element import Element
 
 # @binding.bindable_dataclass
-class TankSlider(Element, component='Tank.vue'):
+class TankSlider(Element, component='components/Tank.vue'):
     # value: float = 0.4
 # class TankSlider(Element, component='OnOff.vue'):
     # def __init__(self, title: str, *, on_change: Optional[Callable] = None) -> None:
@@ -78,13 +78,13 @@ def landing():
     # ui.label('Welcome to HRAP! Choose an analysis mode below.')
     # ui.separator()
     ui.label('Analysis').classes('text-h6')
-        
+    ui.separator()
     with ui.row(align_items='center'):
         for title, desc, mode, thumb_path in [
             ('Hybrid Engine', 'Self-pressurizing liquid oxidizer, solid fuel', 'hybrid', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
             ('Liquid Engine', 'Half-Cat-style liquid oxidizer and fuel', 'liquid', hrap_root/'gui'/'thumbnails'/'liquid.jpg'),
-            ('Solid Motor',   'Solid oxidizer and fuel', 'solid', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
-            ('Chemistry',     'Analyze combustion without engine details', 'chem', hrap_root/'gui'/'thumbnails'/'hybrid.jpg'),
+            ('Solid Motor',   'Solid oxidizer and fuel', 'solid', hrap_root/'gui'/'thumbnails'/'placeholder.jpg'),
+            ('Chemistry',     'Analyze combustion without engine details', 'chem', hrap_root/'gui'/'thumbnails'/'chemistry.jpg'),
         ]:
             with ui.card().tight().classes('w-80'):
                 with ui.image(thumb_path):
@@ -98,28 +98,28 @@ def landing():
         # ui.button('Liquid Engine', on_click=lambda: ui.navigate.to('/liquid')).props('flat no-caps')
         # ui.button('Solid Motor', on_click=lambda: ui.navigate.to('/solid'))
         # ui.button('Chemistry', on_click=lambda: ui.navigate.to('/chem'))
-    ui.separator()
     
     ui.label('Documentation').classes('text-h6')
+    ui.separator()
     with ui.row(align_items='center'):
         with ui.card().tight().classes('w-80'):
-            with ui.image(hrap_root/'gui'/'thumbnails'/'hybrid.jpg'):
+            with ui.image(hrap_root/'gui'/'thumbnails'/'validation.jpg'):
                 with ui.element('div').classes('absolute-bottom text-white p-2'):
                     ui.label('Validation Cases').classes('text-h6')
                     ui.label('Proof of utility double as usage examples').classes('text-subtitle2')
             with ui.card_section():
                 ui.button('View', on_click=lambda mode=mode: ui.navigate.to('/validation')).props('flat no-caps')
         with ui.card().tight().classes('w-80'):
-            with ui.image(hrap_root/'gui'/'thumbnails'/'hybrid.jpg'):
+            with ui.image(hrap_root/'gui'/'thumbnails'/'api_docs.jpg'):
                 with ui.element('div').classes('absolute-bottom text-white p-2'):
                     ui.label('API Documentation').classes('text-h6')
                     ui.label('Our Python interface is flexible and extensible').classes('text-subtitle2')
             with ui.card_section():
                 ui.button('View', on_click=lambda mode=mode: ui.navigate.to('/api_docs')).props('flat no-caps')
                 ui.button('Open in Browser', on_click=lambda mode=mode: ui.navigate.to('https://github.com/rnickel1/HRAP_Source', new_tab=True)).props('flat no-caps')
-    ui.separator()
     
     ui.label('Settings').classes('text-h6')
+    ui.separator()
     
     # ui.label('Your files are preriodically saved')
     
@@ -132,7 +132,7 @@ def landing():
                 dark.enable()
             case 'Light':
                 dark.disable()
-    theme = ui.toggle(['Dark', 'Light', 'Yellow Babber'], value='Dark', on_change=on_theme_change)
+    theme = ui.toggle(['Dark', 'Light', 'Genesis', 'Yellow Babber'], value='Dark', on_change=on_theme_change)
 
 def hybrid():
     with ui.row(align_items='center'):
