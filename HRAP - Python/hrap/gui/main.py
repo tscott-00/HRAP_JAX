@@ -1,3 +1,18 @@
+# Copyright 2026 The HRAP Authors.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # # pip instasll --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
 
 import hrap
@@ -14,10 +29,6 @@ from importlib.metadata import version
 import scipy
 import numpy as np
 
-# import dearpygui.dearpygui as dpg
-# both raw webview and nicegui take around 5s to start up...
-# from bottle import Bottle, route, run, static_file
-import webview # TODO: in deps?
 from nicegui import app, ui, native, binding
 
 from jax.scipy.interpolate import RegularGridInterpolator
@@ -38,6 +49,7 @@ hrap_root = Path(imp_files('hrap')) # HRAP install root
 # app = Bottle()
 
 # Globals to be set later
+webview = None # Package, only imported when run in native winow
 window = None
 
 # TODO:
@@ -136,12 +148,16 @@ def landing():
 
 def hybrid():
     with ui.row(align_items='center'):
-        
-
-        tank_slider = TankSlider('test')
+        ox_slider = TankSlider('Nitrous Oxide')
         # tank_slider.bind_value(tank_value, 'value')
         # tank_value = ui.number('Tank Value', value=0.5).props('color=blue')#.bind_value(tank_slider, 'value')
         ui.button('Jiggle', on_click=lambda: tank_slider.run_method('jiggle')).props('outline')
+
+def liquid():
+    with ui.row(align_items='center'):
+        ox_slider = TankSlider('Nitrous Oxide')
+        fu_slider = TankSlider('Ethanol')
+
 
 # Open file dialog then save
 async def begin_save():
@@ -167,6 +183,7 @@ def root():
     # footer = ui.label()
     pages.add('/', lambda: landing())
     pages.add('/hybrid', lambda: hybrid())
+    pages.add('/liquid', lambda: liquid())
     # pages.add('/other', lambda: other(footer))
     
     
@@ -190,10 +207,12 @@ def root():
 # TODO: any way to autosave on reload?
 # Direct call is if ran via "python .\hrap\gui\main.py" instead of "hrap," which enables development features such as auto reload on file change
 def main(is_direct_call=False):
-    global window #, __name__
+    global window, webview #, __name__
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', help='Open debug, i.e. inspect-element, window', action='store_true')
+    parser.add_argument('--host', help='Host rather than displaying in native window', action='store_true')
+    # parser.add_argument('--reload', help='Reload when script are changes detecte', action='store_true') # Not possible unless direct...
     # parser.add_argument('--path',  help='Data and plots are written within ./results/nnnfgp/[path]', type=str, default='')
     args = parser.parse_args()
         
@@ -206,7 +225,13 @@ def main(is_direct_call=False):
 
     
     # ui.run(root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
-    ui.run(native=True, port=native.find_open_port(), root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
+    if args.host:
+        ui.run(root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
+    else:
+        # both raw webview and nicegui take around 5s to start up...
+        import webview # TODO: in deps?
+        # from qtpy.QtWebChannel import QWebChannel # TODO: this should be found
+        ui.run(native=True, port=native.find_open_port(), root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
     # ui.run(native=True, reload=is_direct_call, port=native.find_open_port())
 
 if __name__ in {'__main__', '__mp_main__'}: main(is_direct_call=True)

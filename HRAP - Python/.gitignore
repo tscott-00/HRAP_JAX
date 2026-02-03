@@ -4,3 +4,4 @@ results/
 *.egg-info/
 .VSCodeCounter/
 hrap/ssts_thermochem.txt
+docs/html

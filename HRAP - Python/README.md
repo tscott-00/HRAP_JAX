@@ -25,10 +25,24 @@ python -m pip uninstall hrap
 
 ## Running HRAP
 To start the GUI, simply run the command from any directory:
-
 ```
 hrap
 ```
+If you wish to run HRAP non-natively, host locally then open in any web browser
+```
+hrap --host
+```
+
+## Alternative installations
+If you wish to run the sim on GPU, install JAX for GPU
+```
+python -m pip install jax[gpu]
+```
+If you are on Linux and run into errors due to lack of a backend, install PyQT6 dependencies
+```
+python -m pip install pywebview[qt]
+```
+You may have to uninstall PyQT5 to avoid conflicts. If you wish to use PyQT5 or need an alternative backend then see https://pywebview.flowrl.com/guide/installation.html or view HRAP in a web browser (recommended if issues persist).
 
 ## Advanced Usage
 If you are interested in advanced usage such as design optimization, uncertainty quantification, adding custom engine models, etc. then the Python API is for you.
@@ -48,7 +62,7 @@ After cloning the repo,
 ```
 cd "HRAP_JAX/HRAP - Python/"
 
-python -m pip install -e ./
+python -m pip install -ve ./
 ```
 
 You can now run the GUI as usual. Your local modifications to the hrap code will be reflected.
