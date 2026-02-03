@@ -1,11 +1,28 @@
-# Purpose: Provide chamber dynamics from tabulated chemical equilibrum properties
+# Copyright 2026 The HRAP Authors.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Authors: Drew Nickel, Thomas A. Scott
 
-from hrap.core import store_x, make_part
+"""Provide chamber dynamics from tabulated chemical equilibrum properties"""
 
 import jax
 import jax.numpy as jnp
 from jax.lax import cond
+from tracept import tclass, tmethod, Placeholder, Dynamic, Derivative
+
+from hrap.core import store_x, make_part
 
 def d_chamber(s, x, xmap):
     Pc       = x[xmap['cmbr_P']]        # Combustion chamber pressure
