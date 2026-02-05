@@ -17,106 +17,111 @@
 
 """Provide chamber dynamics from tabulated chemical equilibrum properties"""
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 from jax.lax import cond
 from tracept import tclass, tmethod, Placeholder, Dynamic, Derivative
 
-from hrap.core import store_x, make_part
+from hrap.chem import Rhat
 
-def d_chamber(s, x, xmap):
-    Pc       = x[xmap['cmbr_P']]        # Combustion chamber pressure
-    grn_mdot = x[xmap['grn_mdot']]         # Rate of grain mass being consumed
-    inj_mdot = x[xmap['tnk_mdot_inj']]      # Rate of tank propellants being consumed
-    noz_mdot = x[xmap['noz_mdot']]      # Rate of mass exiting through nozzle
-    m_g      = x[xmap['cmbr_m_g']]      # Mass of gas currently in chamber
-    V        = x[xmap['cmbr_V0']] - x[xmap['grn_V']] # Gas volume in chamber
-    dV       = x[xmap['grn_Vdot']] # Gas volume in chamber derivative
-    OF       = x[xmap['cmbr_OF']] # O/F ratio, set by grain file
+@tclass(static_attrnames=['comb_props'])
+class Chamber:
+    # Fixed variables
+    comb_props: Callable #: function from OF, Pc to combustion HP equilibrium combustion k,M,T
+    V0:        float #: empty volume
+    cstar_eff: float #: characteristic velocity efficiency
+    # Integrated variables
+    P:      jax.Array = Placeholder() # combustion pressure
+    Pdot:   jax.Array = Derivative('P') # combustion pressure rate
+    m_g:    jax.Array = Placeholder() # stored gas mass
+    mdot_g: jax.Array = Derivative('mdot') #: stored gass mass rate
+    # Dependent variables
+    k:     jax.Array = Dynamic() # specific heat ratio
+    T:     jax.Array = Dynamic() # temperature
+    cstar: jax.Array = Dynamic() #: characteristic velocity
+    OF:    jax.Array = Dynamic() #: oxidizer/fuel mass ratio, handled by grain file
 
-    # Chamber stored mass derivative
-    mdot_g = grn_mdot + inj_mdot - noz_mdot
-    mdot_g = cond((m_g <= 0.0) & (mdot_g < 0.0), lambda val: 0.0, lambda val: val, mdot_g)
+    @classmethod
+    def new(cls, comb_props: Callable, V0: float = -1, cstar_eff: float = 1.0, P0: float = -1, m_g0: float = -1):
+        """Create a new tank filled with saturated fluid.
 
-    # Chamber pressure derivative
-    Pdot = Pc*(mdot_g/m_g - dV/V)
-    Pdot = cond(((Pc <= s['Pa']) & (Pdot < 0.0)) | (m_g <= 0.0), lambda val: 0.0, lambda val: val, Pdot)
-    
-    # Get chamber properties and update cstar
-    # interp_point = jnp.array([[OF, Pc]])
-    # TODO: Need an error if out of bounds?
-    ig = s['chem_interp_k'].grid # interp grid
-    ip = jnp.array([[OF, Pc]]) # interp point
-    for i in range(2):
-        ip = ip.at[:,i].set(jnp.minimum(jnp.maximum(ip[:,i], ig[i][0]), ig[i][-1]))
-    k = s['chem_interp_k'](ip)[0]
-    M = s['chem_interp_M'](ip)[0]
-    T = s['chem_interp_T'](ip)[0]
-    # jax.debug.print('cmbr, k={a}, M={b}, T={c} from OF={d}, Pc={e}', a=k, b=M, c=T, d=OF, e=Pc)
-    
-    R = 8314.5 / M
-    rho = Pc/(R * T)
-    cstar = s['cmbr_cstar_eff']*jnp.sqrt((R*T)/(k*(2/(k+1))**((k+1)/(k-1))))
-    
-    # Store derivatives
-    x = store_x(x, xmap, cmbr_mdot_g=mdot_g, cmbr_Pdot=Pdot, cmbr_k=k, cmbr_T=T, cmbr_cstar=cstar)
+        Args:
+          comb_props: function from OF, Pc to combustion HP equilibrium combustion k,M,T
+          V0: empty volume, specify -1 to assume 1.2*(grn.OD)*(grn.L) for hybrids during prep()
+          cstar_eff: characteristic velocity efficiency
+          P0: initial pressure, specify -1 to use env.Pa during prep()
+          m_g0: initial stored gas mass, specify -1 to determine automatically during prep()
+        Returns:
+          the new chamber
+        """
 
-    return x
+        return cls(V0=V0, cstar_eff=cstar_eff, P=Dynamic(P0), m_g=Dynamic(m_g0))
 
-# Preprocessing
-def p_chamber(s, x0, xmap):
-    V0 = x0[xmap['cmbr_V0']]
-    
-    V0 = cond(V0 == 0.0, lambda Va, Vb: Vb, lambda Va, Vb: Va,   V0, s['grn_L']*(jnp.pi/4*s['grn_OD']**2))
-    m_g0 = (101e3*29/8314/294) * V0 # p = rho R T
+    @tmethod
+    def __call__(self, tnk, noz, env, grn=None):
+        """Update dependent states."""
 
-    x0 = store_x(x0, xmap, cmbr_V0=V0, cmbr_m_g=m_g0)
+        cmbr, inj = self, tnk.inj # Aliases
 
-    return x0
+        # Chamber stored mass derivative
+        cmbr.mdot_g = inj.mdot - noz.mdot
+        if grn is not None:
+            cmbr.mdot_g = cmbr.mdot_g + grn.mdot
+        cmbr.mdot_g = cond(
+            (cmbr.m_g <= 0.0) & (cmbr.mdot_g < 0.0),
+            lambda: 0.0,
+            lambda: cmbr.mdot_g,
+        )
 
-def u_chamber(s, x, xmap):
-    # Limit stored and gas and pressure to reasonable values
-    x = store_x(x, xmap,
-        cmbr_m_g = jnp.maximum(x[xmap['cmbr_m_g']],     0.0),
-        cmbr_P   = jnp.maximum(x[xmap['cmbr_P']],   s['Pa']),
-    )
-    
-    return x
-
-def make_chamber(**kwargs):
-    return make_part(
-        # Default static parameters
-        s = {
-            'cstar_eff': 1.0,
-        },
+        # Chamber pressure derivative
+        cmbr.Pdot = Pc*mdot_g/m_g
+        if grn is not None:
+            cmbr.Pdot = cmbr.Pdot - Pc*grn.dV/(cmbr.V0 - grn.V)
+        cmbr.Pdot = cond(
+            ((cmbr.P <= env.Pa) & (cmbr.Pdot < 0.0)) | (cmbr.m_g <= 0.0),
+            lambda: 0.0,
+            lambda: cmbr.Pdot,
+        )
         
-        # Default initial variables
-        x = {
-            'V0': 0.0, # Empty volume, doesn't change after initialization
-
-            'P':   101e3,
-            'm_g': 1E-3,
-            
-            # Calculated variables
-            'k': 0.0,
-            'T': 0.0,
-            'cstar': 0.0,
-            'OF': 0.0, # Handled by grain file
-        },
+        # Get chamber properties and update cstar
+        # interp_point = jnp.array([[OF, Pc]])
+        # TODO: Need an error if out of bounds?
+        # ig = s['chem_interp_k'].grid # interp grid
+        # ip = jnp.array([[OF, Pc]]) # interp point
+        # for i in range(2):
+        #     ip = ip.at[:,i].set(jnp.minimum(jnp.maximum(ip[:,i], ig[i][0]), ig[i][-1]))
+        # k = s['chem_interp_k'](ip)[0]
+        # M = s['chem_interp_M'](ip)[0]
+        # T = s['chem_interp_T'](ip)[0]
+        cmbr.k, M, cmbr.T = cmbr.comb_props(OF, Pc)
+        # jax.debug.print('cmbr, k={a}, M={b}, T={c} from OF={d}, Pc={e}', a=k, b=M, c=T, d=OF, e=Pc)
         
-        # Required and integrated variables
-        req_s = [],
-        req_x = [],
+        k = cmbr.k
+        cmbr.cstar = cmbr.cstar_eff * jnp.sqrt((Rhat/M*cmbr.T)/(k*(2/(k+1))**((k+1)/(k-1))))
+
+    @tmethod
+    def prep(self, env, grn=None):
+        """Automatically deterime dependent defaults requested on initialization.
+    
+        This is one of the few functions that is incompatible with JIT compilation (since V0 is fixed).
+        """
+
+        cmbr = self # Aliases
+
+        if cmbr.V0 == -1:
+            cmbr.V0 = grn.L*(jnp.pi/4*grn.OD**2)
+        if cmbr.P == -1:
+            cmbr.P = env.Pa
+        if cmbr.m_g == -1:
+            cmbr.m_g = (cmbr.P*29/Rhat/294) * V0 # Ideal gas, p = rho R T
+
+    @tmethod
+    def increment(self, env):
+        """Limit stored and gas and pressure to tenable values."""
+
+        cmbr = self # Aliases
         
-        # State name to derivative name for integrated variables
-        dx = { 'P': 'Pdot', 'm_g': 'mdot_g' } ,
-
-        # Designation and associated functions
-        typename = 'cmbr',
-        fpreprs = p_chamber,
-        fderiv  = d_chamber,
-        fupdate = u_chamber,
-
-        # The user-specified s or x entries
-        **kwargs,
-    )
+        cmbr.m_g = jnp.maximum(cmbr.m_g,    0.0)
+        cmbr.P   = jnp.maximum(cmbr.P,   env.Pa)

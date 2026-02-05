@@ -1,21 +1,38 @@
-# Purpose: Provide HP (inputs are reactant enthalpy and fixed pressure) chemical equilibrium
-#   via Gibb's free energy minimization for use in chamber calculations
-# The assumptions and capabilities of this module are tailored towards
-#   hobbyist/student rocket engines used in amateur rocketry.
-# Note: RPA, CEA, PROPEP, and HRAP all use this same algorithm
-#   PROPEP is the most notable fully open source alternative.
-#   However, HRAP considers a special case, most notably we neglect
-#   condensed species in the output due to irrelevance to our application.
-# Why make this?
-#   Because pypropep is abandoned and broken for modern Python,
-#   pycea and RocketCEA have limited version compatability while being
-#   tailored towards usage as an application rather than as an API,
-#   and Cantera's equilibrium solver has been broken for over a decade.
-#   That is, this was developed to provide existing capabilities but
-#   with a smoother user experience for HRAP.
-# Author: Thomas A. Scott
+# Copyright 2026 The HRAP Authors.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# UNIT TESTS ARE WIP!
+# Authors: Thomas A. Scott
+
+""" Provide HP (inputs are reactant enthalpy and fixed pressure) chemical equilibrium
+  via Gibb's free energy minimization for use in chamber calculations
+The assumptions and capabilities of this module are tailored towards
+  hobbyist/student rocket engines used in amateur rocketry.
+Note: RPA, CEA, PROPEP, and HRAP all use this same algorithm
+  PROPEP is the most notable fully open source alternative.
+  However, HRAP considers a special case, most notably we neglect
+  condensed species in the output due to irrelevance to our application.
+Why make this instead of using an external library?
+  Because pypropep is abandoned and broken for modern Python,
+  pycea and RocketCEA have limited version compatability while being
+  tailored towards usage as an application rather than as an API,
+  and Cantera's equilibrium solver has been broken for over a decade.
+  That is, this was developed to provide existing capabilities but
+  with a smoother user experience for HRAP.
+"""
+
+# TODO: UNIT TESTS ARE WIP!
 
 # Terminlogy explanations:
 # Mixture - reaction products
@@ -48,8 +65,6 @@ from typing import Dict
 from hrap.units import _atm
 
 Rhat = 8314 # J/(K*kmol), universal gas constant
-
-
 
 @dataclass
 class NASA9(object):
@@ -214,7 +229,7 @@ class InternalState(object):
 
 def solver_cond(loop_val):
     i, is_converged, x, xm = loop_val
-    return i <= xm.max_iters #and not is_converged
+    return (i <= xm.max_iters) & (~is_converged)
 def solver_body(loop_val):
     i, is_converged, x, xm = loop_val
     gas_Cp_D, gas_H_D, gas_S_D = [get_my_D(xm.gas_T_bounds, xm.gas_coeffs, x.T) for get_my_D in [get_Cp_D, get_H_D, get_S_D]]
@@ -279,10 +294,13 @@ def solver_body(loop_val):
     sumN_j = jnp.sum(x.n_j)
     convergeGas = (jnp.sum(x.n_j*jnp.abs(x.Deltan_j)) / sumN_j) <= 5e-6
     convergeTotal = (x.n * jnp.abs(x.Deltaln_n) / sumN_j) <= 5e-6
-    sum_aij_nj = jnp.sum(xm.gas_a[i] * x.n_j[:,None], axis=0)
-    massBalanceConvergence = jnp.all(jnp.abs(x.b_i0 - sum_aij_nj) > x.b_i0_max*1e-6)
+    sum_aij_nj = jnp.sum(xm.gas_a * x.n_j[:,None], axis=0) # n_j[j]*gas_a[j,:]
+    massBalanceConvergence = jnp.all(jnp.abs(x.b_i0 - sum_aij_nj) < x.b_i0_max*1e-6)
     is_converged = convergedTemp & convergeGas & convergeTotal & massBalanceConvergence
     # TODO: Also do TRACE != 0 convergence test for pi_i
+    # jax.debug.print('Converged? {} {}, T {}, gas {}, total {}, bal {}', is_converged, i, convergedTemp, convergeGas, convergeTotal, massBalanceConvergence)
+    # jax.debug.print('Converged? {}, T {}, gas {}, total {}, bal {} vs {} is {}', i, jnp.abs(x.Deltaln_T), (jnp.sum(x.n_j*jnp.abs(x.Deltan_j)) / sumN_j), (x.n * jnp.abs(x.Deltaln_n) / sumN_j), jnp.abs(x.b_i0 - sum_aij_nj), x.b_i0_max*1e-6, jnp.abs(x.b_i0 - sum_aij_nj) - x.b_i0_max*1e-6)
+    # jax.debug.print('bi0, {}, sum current {}', x.b_i0, sum_aij_nj)
 
     return i+1, is_converged, x, xm
 def solver_loop(x, xm):
@@ -572,10 +590,10 @@ class ChemSolver:
         
         # Solve for the equilibrium state
         i, x = solver_loop(x, xm)
-        if i == max_iters + 1: i = max_iters # If terminated due to max_iters, will be 1 too high
+        # if i == max_iters + 1: i = max_iters # If terminated due to max_iters, will be 1 too high
 
         result = self.Result(True)
-        result.iters = i
+        result.iters = i - 1 # Always too high as condition is after increment
         result.T = x.T
         result.M = 1/x.n
         result.R = Rhat / result.M

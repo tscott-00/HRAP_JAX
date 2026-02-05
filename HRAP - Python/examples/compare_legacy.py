@@ -1,5 +1,21 @@
-# Purpose: Provide cross validation between legacy capabilities and current streamlined models
+# Copyright 2026 The HRAP Authors.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Authors: Thomas A. Scott
+
+"""Provide cross validation between legacy capabilities and current streamlined models"""
 
 import scipy
 import numpy as np
@@ -10,10 +26,11 @@ import matplotlib.pyplot as plt
 
 import hrap.core as core
 import hrap.fluid as fluid
-from hrap.tank    import *
-from hrap.grain   import *
-from hrap.chamber import *
-from hrap.nozzle  import *
+from hrap.tank    import SatTank
+# from hrap.grain   import *
+from hrap.chamber import Chamber
+# from hrap.nozzle  import *
+from hrap.motors import SelfPressurizedHybrid
 from hrap.units   import _in, _ft, _lbf, _atm
 
 

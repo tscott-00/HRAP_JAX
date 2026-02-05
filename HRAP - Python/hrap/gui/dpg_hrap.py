@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 import time
 from pathlib import Path
 import pickle as pkl
@@ -29,7 +30,7 @@ from dearpygui_ext.themes import create_theme_imgui_light, create_theme_imgui_da
 hrap_version = version('hrap')
 
 # Virtualized Python environments may redirect these to other locations
-# Note that Windows Store Python redirects %APPDATA%\Roaming to %APPDATA%\Local\Packages\PythonSoftwareFoundation.Python.[some garbage]\LocalCache\Roaming
+# For example, Windows Store Python redirects %APPDATA%\Roaming to %APPDATA%\Local\Packages\PythonSoftwareFoundation.Python.[some garbage]\LocalCache\Roaming
 def get_datadir() -> Path:
     home = Path.home()
     if sys.platform == 'win32':
@@ -41,6 +42,7 @@ def get_datadir() -> Path:
 
 # Global vars, issues unless declared outside of main
 hrap_root    = None
+settings     = None
 active_file  = None
 config       = { }
 upd_due      = True
@@ -51,6 +53,11 @@ comb, oxidizers, fuels = [None]*3
 get_sat_props, get_Pv_loss = None, None
 
 N_fuel = 3
+
+time_steppers = {
+    'Forward Euler': core.step_fe,
+    'Heun': core.step_heun,
+}
 
 def clamped_param(val, props):
     if 'min' in props and val < props['min']:
@@ -94,9 +101,9 @@ def upd_param(tag):
 
 def set_param(tag, val):
     props = config[tag]
-    _v = float(val)
-    if 'units' in props: _v = props['sim2gui_units'](_v)
-    dpg.set_value(tag, _v)
+    if props['type'] == float: val = float(val) # Cast to ensure correct type for reals i.e. to convert JAX containers
+    if 'units' in props: val = props['sim2gui_units'](val)
+    dpg.set_value(tag, val)
     return upd_param(tag)
 
 # Callbacks for manual adjustments (gets sets the UI components, not the motor)
@@ -199,27 +206,47 @@ def init_deps(): # Called after init/load to verify consistency
 def prep_chem(allow_rho_est=True):
     chem_ox = { oxidizers['Nitrous Oxide']['chem']: 1.0 }
     chem_fu = {  }
-    sum_fu_mf, grn_rho_est = 0.0, 0.0
+    sum_fu_mf, can_rho_est = 0.0, True
     for i in range(N_fuel):
         component_i, mfrac_i = [dpg.get_value(k.format(i)) for k in ['grn_component_{}', 'grn_mfrac_{}']]
         if component_i != 'None':
             chem_fu[fuels[component_i]['chem']] = mfrac_i
             sum_fu_mf += mfrac_i # For normalization
-            # rho = (sum m_i)/(sum V_i) = (sum m mf_i)/(sum m mf_i 1/rho_i) = 1 / (sum mf_i/rho_i)
-            grn_rho_est += mfrac_i / fuels[component_i]['rho']
-    grn_rho_est = 1 / grn_rho_est * sum_fu_mf
-    if allow_rho_est and dpg.get_value('grn_est_rho'):
-        set_param('grn_rho', grn_rho_est)
+            if 'rho' not in fuels[component_i]:
+                can_rho_est = False
+    
+    if allow_rho_est: # During first init call this isn't allowed as set_param isn't ready
+        if can_rho_est:
+            # dpg.configure_item('grn_est_rho', readonly=~can_rho_est) # Isn't supported for some reason...
+            grn_rho_est = 0.0
+            for i in range(N_fuel):
+                component_i, mfrac_i = [dpg.get_value(k.format(i)) for k in ['grn_component_{}', 'grn_mfrac_{}']]
+                if component_i != 'None':
+                    # rho = (sum m_i)/(sum V_i) = (sum m mf_i)/(sum m mf_i 1/rho_i) = 1 / (sum mf_i/rho_i)
+                    grn_rho_est += mfrac_i / fuels[component_i]['rho']
+            grn_rho_est = 1 / grn_rho_est * sum_fu_mf
+            if dpg.get_value('grn_est_rho'):
+                set_param('grn_rho', grn_rho_est)
+        else:
+            dpg.set_value('grn_est_rho', False)
+            dpg.configure_item('grn_rho', readonly=False)
+    
     return chem_ox, chem_fu, sum_fu_mf
 
 def update_chem(chem_ox, chem_fu, sum_fu_mf=1.0):
     chem_Pc, chem_OF = np.linspace(10*units._atm, 50*units._atm, 10), np.linspace(1.0, 10.0, 20)
     chem_k, chem_M, chem_T = [np.zeros((chem_Pc.size, chem_OF.size)) for i in range(3)]
     internal_state = None
+    internal_state_row = None
     for j, OF in enumerate(chem_OF):
         for i, Pc in enumerate(chem_Pc):
             o = OF / (1 + OF) # o/f = OF, o+f=1 => o=OF/(1 + OF)
-            flame, internal_state = comb.solve(Pc, {**{c: mf*o for c,mf in chem_ox.items()}, **{c: mf/sum_fu_mf*(1-o) for c,mf in chem_fu.items()}}, max_iters=150, internal_state=internal_state)
+            # Use last Pc as guess for fixed OF, last OF first PC when starting a new OF
+            _internal_state = internal_state_row if i == 0 else internal_state
+            flame, internal_state = comb.solve(Pc, {**{c: mf*o for c,mf in chem_ox.items()}, **{c: mf/sum_fu_mf*(1-o) for c,mf in chem_fu.items()}}, max_iters=150, internal_state=_internal_state, reinit=False)
+            if i == 0 and j < len(chem_OF)-1:
+                x, xm, pe = internal_state
+                internal_state_row = (copy.deepcopy(x), copy.deepcopy(xm), pe)
             chem_k[i,j], chem_M[i,j], chem_T[i,j] = flame.gamma, flame.M, flame.T
 
     chem_interp_k = RegularGridInterpolator((chem_OF, chem_Pc), chem_k, fill_value=1.4)
@@ -268,8 +295,7 @@ def setup_motor(tnk_inj_vap_model, tnk_inj_liq_model, chem_interp_k, chem_interp
     # direct_x_tags = [tag in direct_tags if tag in method['xmap']]
 
     fire_engine = core.make_integrator(
-        # core.step_rk4,
-        core.step_fe,
+        time_steppers[dpg.get_value('sim_time_stepper')],
         method,
     )
     
@@ -307,6 +333,11 @@ def recompile_motor():
     man_call_tnk_T()
     print('tnk T lims', config['tnk_T']['min'], config['tnk_T']['max'])
 
+# Helper to mark sim for re-run when high-level parmaters like time step are changed that aren't automatically checked i.e. those not belonging to x or s and without other GUI logic
+def make_update_due():
+    global upd_due
+    upd_due = True
+
 def calculate_m_Cg():
     dry_m, dry_cg, tnk_ID, ox_pos, grn_pos = [get_param(k) for k in ['dry_m', 'dry_cg', 'tnk_D', 'ox_pos', 'grn_pos']]
     T_ox, m_ox_vap, m_ox_liq, rho_ox_vap, rho_ox_liq, cmbr_m_g, grn_A = [xstack[:,method['xmap'][k]] for k in ['tnk_T', 'tnk_m_ox_vap', 'tnk_m_ox_liq', 'tnk_rho_ox_vap', 'tnk_rho_ox_liq', 'cmbr_m_g', 'grn_A']]
@@ -328,7 +359,7 @@ def calculate_m_Cg():
     return m, cg
 
 def main():
-    global hrap_root, config, upd_due, t, xstack, comb, oxidizers, fuels #, s, x, method
+    global hrap_root, settings, config, upd_due, t, xstack, comb, oxidizers, fuels #, s, x, method
 
     print('beginning w/ hrap version', hrap_version)
     jax.config.update('jax_enable_x64', True)
@@ -446,7 +477,12 @@ def main():
             'chem': 'AL(cr)',
             'rho': 2712.0, # kg/m3
         },
+        'Paraffin': {
+            'chem': 'C32H66(a)',
+        }
     }
+    for f in ['HTPB', 'Polyethylene']:
+        fuels[f] = { 'chem': f }
 
 
     # dpg.set_viewport_vsync(True)
@@ -476,14 +512,15 @@ def main():
         set_whxy('grain',   vw // 2, vh // 3 - mh, vw // 2, mh         )
         set_whxy('chamber', vw // 2, vh // 6,      0,       vh // 3    )
         set_whxy('misc',    vw // 2, vh // 6,      0,       vh // 2)
-        set_whxy('nozzle',  vw // 2, vh // 3,      vw // 2, vh // 3    )
+        set_whxy('nozzle',  vw // 2, vh // 6,      vw // 2, vh // 3    )
+        set_whxy('numerics',vw // 2, vh // 6,      vw // 2, vh // 2    )
         set_whxy('previewL', vw // 2, vh // 3,     0,       2 * vh // 3)
         set_whxy('previewR', vw // 2, vh // 3,     vw // 2, 2 * vh // 3)
 
         for i in range(2): set_wh('preview_{i}'.format(i=i), vw // 2 - 18, vh // 3 - 36)
 
     # First row
-    settings = { 'no_move': True, 'no_collapse': True, 'no_resize': True, 'no_close': True }
+    dpg_settings = { 'no_move': True, 'no_collapse': True, 'no_resize': True, 'no_close': True }
 
     def make_param(title, props):
         config[props['tag']] = props
@@ -608,7 +645,7 @@ def main():
     with dpg.handler_registry():
         dpg.add_key_press_handler(callback=key_press_handler)
     
-    with dpg.window(label='menu', tag='menu', no_title_bar=True, menubar=True, no_bring_to_front_on_focus=True, **settings):
+    with dpg.window(label='menu', tag='menu', no_title_bar=True, menubar=True, no_bring_to_front_on_focus=True, **dpg_settings):
         with dpg.file_dialog(tag='load', default_filename='', directory_selector=False, show=False, width=700, height=400, callback=load_callback):
             dpg.add_file_extension('.hrap')
         with dpg.file_dialog(tag='save_as', default_filename='', directory_selector=False, show=False, width=700 ,height=400, callback=save_as_callback):
@@ -643,7 +680,7 @@ def main():
         col_w = [1.0, 1.0, 0.2]
         input_table_kwargs = core.make_dict(header_row=False, resizable=False, borders_innerV=False, borders_innerH=True, policy=dpg.mvTable_SizingStretchProp)
         # Make tank window
-        with dpg.window(tag='tank', label='Tank', **settings):
+        with dpg.window(tag='tank', label='Tank', **dpg_settings):
             # diam_units = {}
             diam_steps = {'mm': 1.0, 'cm': 0.1, 'in': 1/16}
             diam_decim = {'mm': 4, 'cm': 3, 'm': 1, 'in': 3, 'ft': 5}
@@ -694,7 +731,7 @@ def main():
                 make_param('Injector Diameter', {
                     'type': float, 'units': 'mm',
                     'tag': 'tnk_inj_D',
-                    'min': 1E-3,
+                    'min': 1E-4,
                     'default': 0.5 * _in,
                     'step': 1E-3,
                     'decimal': 6,
@@ -774,7 +811,7 @@ def main():
                 })
         
         # Make grain window
-        with dpg.window(tag='grain', label='Grain', **settings):
+        with dpg.window(tag='grain', label='Grain', **dpg_settings):
             # show_item, hide_item
             with dpg.table(**input_table_kwargs):
                 for i in range(3): dpg.add_table_column(init_width_or_weight=col_w[i])
@@ -830,7 +867,7 @@ def main():
                     'decimal': 2,
                 })
                 with dpg.table_row():
-                    dpg.add_checkbox(label='Use Estimated Density', tag='grn_est_rho', default_value=True, callback=lambda: dpg.configure_item('grn_rho', readonly=dpg.get_value('grn_est_rho')))
+                    dpg.add_checkbox(label='Use Estimated Density', tag='grn_est_rho', default_value=True, callback=lambda: [recompile_motor(), dpg.configure_item('grn_rho', readonly=dpg.get_value('grn_est_rho'))])
                 make_param('Density', {
                     'type': float,
                     'tag': 'grn_rho', 'direct': True,
@@ -864,12 +901,12 @@ def main():
                     dpg.add_text('Warning: mfrac normalization has occured')
         
         # Make chamber window
-        with dpg.window(tag='chamber', label='Chamber', **settings):
+        with dpg.window(tag='chamber', label='Chamber', **dpg_settings):
             with dpg.table(**input_table_kwargs):
                 for i in range(3): dpg.add_table_column(init_width_or_weight=col_w[i])
                 
                 make_param('Volume', {
-                    'type': float, units: 'cc',
+                    'type': float, 'units': 'cc',
                     'tag': 'cmbr_V0', 'direct': True,
                     'min': 0.0,
                     'step': 1E-4,
@@ -885,7 +922,7 @@ def main():
                 })
         
         # Make misc window
-        with dpg.window(tag='misc', label='Export Config', **settings):
+        with dpg.window(tag='misc', label='Export Config', **dpg_settings):
             with dpg.table(**input_table_kwargs):
                 for i in range(3): dpg.add_table_column(init_width_or_weight=col_w[i])
                 
@@ -939,7 +976,7 @@ def main():
                 })
         
         # Make nozzle window
-        with dpg.window(tag='nozzle', label='Nozzle', **settings):
+        with dpg.window(tag='nozzle', label='Nozzle', **dpg_settings):
             with dpg.table(**input_table_kwargs):
                 for i in range(3): dpg.add_table_column(init_width_or_weight=col_w[i])
                 
@@ -959,11 +996,11 @@ def main():
                     'step': 1E-2,
                     'decimal': 3,
                 })
-                make_param('Throat Diameter [m]', {
+                make_param('Throat Diameter', {
                     'type': float, 'units': 'mm',
-                    'tag': 'noz_thrt',
+                    'tag': 'noz_thrt', 'direct': True,
                     'key': 'thrt',
-                    'min': 0.001,
+                    'min': 0.0001,
                     'default': 1.75 * _in,
                     'step': 1E-3,
                     'decimal': 3,
@@ -990,9 +1027,41 @@ def main():
                 })
             # TODO: atm pressure, button to optimize (based on ss, mid liq?)!
         
+        # Make simulator config window
+        with dpg.window(tag='numerics', label='Numerics', **dpg_settings):
+            with dpg.table(**input_table_kwargs):
+                for i in range(3): dpg.add_table_column(init_width_or_weight=col_w[i])
+                
+                make_param('Run time [s]', {
+                    'type': float,
+                    'tag': 'sim_T',
+                    'min': 0.1, 'max': 30.0,
+                    'default': 10.0,
+                    'step': 1E0,
+                    'decimal': 2,
+                    'man_call': make_update_due,
+                })
+                make_param('Time step [s]', {
+                    'type': float,
+                    'tag': 'sim_dt',
+                    'min': 1E-4, 'max': 1E-2,
+                    'default': 1E-3,
+                    'step': 1E-3,
+                    'decimal': 5,
+                    'man_call': make_update_due,
+                })
+                make_param('Time Stepping Scheme', {
+                    'type': list,
+                    'tag': 'sim_time_stepper',
+                    'items': list(time_steppers.keys()),
+                    'default': 'Heun',
+                    'man_call': recompile_motor,
+                })
+                # TODO: time stepping scheme selector
+        
         i, preview_win_tag = 0, 'previewL'
         # in enumerate(['previewL', 'previewR']):
-        with dpg.window(tag=preview_win_tag, label='Preview', **settings):
+        with dpg.window(tag=preview_win_tag, label='Preview', **dpg_settings):
             # dpg.add_text('Bottom Right Section')
             # dpg.add_simple_plot(label='Simple Plot', min_scale=-1.0, max_scale=1.0, height=300, tag='plot')
             # create plot
@@ -1003,7 +1072,7 @@ def main():
                 dpg.add_plot_axis(dpg.mvYAxis, label='Thrust (N)', tag=plt_tag+'_y_axis')
                 dpg.add_line_series([], [], label='Total', parent=plt_tag+'_y_axis', tag=plt_tag+'_series')
         i, preview_win_tag = 1, 'previewR'
-        with dpg.window(tag=preview_win_tag, label='Preview', **settings):
+        with dpg.window(tag=preview_win_tag, label='Preview', **dpg_settings):
             plt_tag = f'preview_{i}'
             with dpg.plot(tag=plt_tag, height=300, width=800):
                 dpg.add_plot_legend()
@@ -1042,9 +1111,9 @@ def main():
             upd_due = False
             upd_wall_t = wall_t
         
-            T = 10.0
+            # T = 10.0
             t10 = time.time()
-            t, _, xstack = fire_engine(s, x, dt=1E-3, T=T)
+            t, _, xstack = fire_engine(s, x, dt=dpg.get_value('sim_dt'), T=dpg.get_value('sim_T'))
             jax.block_until_ready(xstack)
             xstack = np.copy(xstack)
             # tnk, grn, cmbr, noz = _unpack_engine(s, xstack)

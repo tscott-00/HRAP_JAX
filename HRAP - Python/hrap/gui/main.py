@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# # pip instasll --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
+# pip instasll --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
 
 import hrap
 
@@ -28,7 +28,6 @@ from importlib.metadata import version
 
 import scipy
 import numpy as np
-
 from nicegui import app, ui, native, binding
 
 from jax.scipy.interpolate import RegularGridInterpolator
@@ -107,9 +106,6 @@ def landing():
                     ui.button('New',    on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
                     ui.button('Load',   on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
                     ui.button('Resume', on_click=lambda mode=mode: ui.navigate.to('/'+mode)).props('flat no-caps')
-        # ui.button('Liquid Engine', on_click=lambda: ui.navigate.to('/liquid')).props('flat no-caps')
-        # ui.button('Solid Motor', on_click=lambda: ui.navigate.to('/solid'))
-        # ui.button('Chemistry', on_click=lambda: ui.navigate.to('/chem'))
     
     ui.label('Documentation').classes('text-h6')
     ui.separator()
@@ -151,13 +147,41 @@ def hybrid():
         ox_slider = TankSlider('Nitrous Oxide')
         # tank_slider.bind_value(tank_value, 'value')
         # tank_value = ui.number('Tank Value', value=0.5).props('color=blue')#.bind_value(tank_slider, 'value')
-        ui.button('Jiggle', on_click=lambda: tank_slider.run_method('jiggle')).props('outline')
+        ui.button('Jiggle', on_click=lambda: ox_slider.run_method('jiggle')).props('outline')
 
 def liquid():
     with ui.row(align_items='center'):
         ox_slider = TankSlider('Nitrous Oxide')
         fu_slider = TankSlider('Ethanol')
 
+def chem():
+    with ui.row(align_items='center'):
+        ni = ui.number(label='Number', value=3.1415927, format='%.2f')#, suffix='m')
+          # on_change=lambda e: result.set_text(f'you entered: {e.value}'))
+        # 1. Track the state of the selection
+        selection = {'unit': 'USD'}
+        with ni.add_slot('append'):
+            unit_button = ui.button().props('flat color=grey-4 dense').bind_text_from(selection, 'unit')
+        
+            # 3. Add the dropdown menu
+            with ui.menu() as menu:
+                def select_unit(new_unit):
+                    selection['unit'] = new_unit
+                    # menu.close()
+                
+                ui.menu_item('USD', on_click=lambda: select_unit('USD'))
+                ui.menu_item('EUR', on_click=lambda: select_unit('EUR'))
+                ui.menu_item('GBP<sup>3</sup>', on_click=lambda: select_unit('GBP'))
+                with ui.menu_item(on_click=lambda: select_unit('Test')):
+                    ui.html('m<sup>3</sup>')
+                    # ui.markdown(r'm<sup>3</sup>')
+                    # ui.markdown(r'$m^3$', extras=['latex']) # needs latex2mathml
+        #     with ui.button(icon='arrow_drop_down', color='grey-7').props('flat round'):
+        #         with ui.menu() as menu:
+        #             ui.menu_item('USD', on_click=lambda: ui.notify('Switched to USD'))
+        #             ui.menu_item('EUR', on_click=lambda: ui.notify('Switched to EUR'))
+        #             ui.menu_item('GBP', on_click=lambda: ui.notify('Switched to GBP'))
+        ui.number(label='O/F', value=4.0, min=0.01, max=100.0, step=0.1)
 
 # Open file dialog then save
 async def begin_save():
@@ -184,6 +208,7 @@ def root():
     pages.add('/', lambda: landing())
     pages.add('/hybrid', lambda: hybrid())
     pages.add('/liquid', lambda: liquid())
+    pages.add('/chem', lambda: chem())
     # pages.add('/other', lambda: other(footer))
     
     
