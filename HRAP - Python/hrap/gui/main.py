@@ -71,18 +71,12 @@ window = None
 
 from nicegui.element import Element
 
-# HTML code to nicely display units, to access use unit_html_names.get(unit_type,{}).get(unit,unit)
-_unit_html_names = {
-    'area': {'mm2': 'mm<sup>2</sup>', 'in2': 'in<sup>2</sup>'},
+# HTML code to nicely display units
+def get_unit_html_name(unit_type, unit, _names={
+    'area': {f'{base}2': f'{base}<sup>2</sup>' for base in ['mm', 'in']},
     'temperature': {'C': '&deg;C', 'F': '&deg;F'},
-}
-get_unit_html_name = lambda unit_type, unit, _names=_unit_html_names: _names.get(unit_type,{}).get(unit,unit)
-# for unit_type in unit_conversions:
-#     if unit_type not in unit_html_names:
-#         unit_html_names[unit_type] = { }
-#     for unit in unit_conversions[unit_type]:
-#         if unit not in unit_html_names[unit_type]:
-#             unit_html_names[unit_type][unit] = unit
+}):
+    _names.get(unit_type,{}).get(unit,unit)
 
 # @binding.bindable_dataclass
 class TankSlider(Element, component='components/Tank.vue'):
