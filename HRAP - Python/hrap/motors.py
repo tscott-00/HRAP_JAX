@@ -20,16 +20,18 @@
 import jax
 import jax.numpy as jnp
 # from jax.lax import cond
-from tracept import tclass, tmethod, Placeholder, Dynamic, Derivative
+from tracept import tclass, tmethod, Dynamic, Derivative
 
 from hrap.tank import SatTank
 from hrap.chamber import Chamber
+from hrap.nozzle import FrozenCDNozzle
 
 @tclass
 class SelfPressurizedHybrid:
     # Individual components
     tnk: SatTank
     cmbr: Chamber
+    noz: FrozenCDNozzle
 
     @tmethod
     def __call__(self):
@@ -37,6 +39,7 @@ class SelfPressurizedHybrid:
 
         self.tnk(self.cmbr, self.env)
         self.cmbr(self.tnk, self.noz, self.env, self.grn)
+        self.noz(self.cmbr, self.env)
 
     @tmethod
     def prep(self):

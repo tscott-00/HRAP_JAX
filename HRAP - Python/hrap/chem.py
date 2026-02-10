@@ -499,19 +499,19 @@ class ChemSolver:
     @dataclass
     class Result:
         T: float # K
-        # Important: these are equilibrium Cp, Cv, gamma; NOT FOZEN
+        # Important: these are equilibrium Cp, Cv, gamma; NOT FROZEN
         #   i.e. they account for changing chemical composiRtion w.r.t. pressure and density, respectively
-        Cp: float
-        Cv: float
-        gamma: float # Specific heat ratio
-        gamma_s: float # Isentropic exponent, (d ln(P) / d ln(rho))_s, used in place of specific heat ratio for speed of sound
-        M: float # kg/kmol, molar mass
-        R: float
-        valid: bool # No errors and has any inputs
+        Cp: float #: shifting equilibrium constant-pressure specific heat
+        Cv: float #: shifting equilibrium constant-volume specific heat
+        gamma: float #: shifting equilibrium specific heat ratio
+        gamma_s: float #: isentropic exponent, (d ln(P) / d ln(rho))_s, used in place of specific heat ratio for speed of sound for proper shifting equilibrium calculations
+        M: float #: molar mass [kg/kmol]
+        R: float #: specific gas constant
+        valid: bool #: no errors and has any inputs
         iters: int
-        composition: dict # Composition by (component formula, molar fraction)
+        composition: dict #: composition by (component formula, molar fraction)
         
-        def __init__(self, valid):
+        def __init__(self, valid): # TODO: bad, should init on dataclass
             self.valid = valid
     
     def solve(self, Pc, supply, max_iters=200, internal_state=None, reinit=True):

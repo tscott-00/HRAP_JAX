@@ -22,7 +22,7 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 from jax.lax import cond
-from tracept import tclass, tmethod, Placeholder, Dynamic, Derivative
+from tracept import tclass, tmethod, Dynamic, Derivative
 
 from hrap.chem import Rhat
 
@@ -33,15 +33,15 @@ class Chamber:
     V0:        float #: empty volume
     cstar_eff: float #: characteristic velocity efficiency
     # Integrated variables
-    P:      jax.Array = Placeholder() # combustion pressure
-    Pdot:   jax.Array = Derivative('P') # combustion pressure rate
-    m_g:    jax.Array = Placeholder() # stored gas mass
-    mdot_g: jax.Array = Derivative('mdot') #: stored gass mass rate
+    P:      Dynamic #: combustion pressure
+    m_g:    Dynamic #: stored gas mass
+    Pdot:   Dynamic = Derivative('P') #: combustion pressure rate
+    mdot_g: Dynamic = Derivative('mdot') #: stored gass mass rate
     # Dependent variables
-    k:     jax.Array = Dynamic() # specific heat ratio
-    T:     jax.Array = Dynamic() # temperature
-    cstar: jax.Array = Dynamic() #: characteristic velocity
-    OF:    jax.Array = Dynamic() #: oxidizer/fuel mass ratio, handled by grain file
+    k:     Dynamic = None #: specific heat ratio
+    T:     Dynamic = None #: temperature
+    cstar: Dynamic = None #: characteristic velocity
+    OF:    Dynamic = None #: oxidizer/fuel mass ratio, handled by grain file
 
     @classmethod
     def new(cls, comb_props: Callable, V0: float = -1, cstar_eff: float = 1.0, P0: float = -1, m_g0: float = -1):
@@ -57,12 +57,11 @@ class Chamber:
           the new chamber
         """
 
-        return cls(V0=V0, cstar_eff=cstar_eff, P=Dynamic(P0), m_g=Dynamic(m_g0))
+        return cls(V0=V0, cstar_eff=cstar_eff, P=P0, m_g=m_g0)
 
     @tmethod
     def __call__(self, tnk, noz, env, grn=None):
         """Update dependent states."""
-
         cmbr, inj = self, tnk.inj # Aliases
 
         # Chamber stored mass derivative
@@ -107,7 +106,6 @@ class Chamber:
     
         This is one of the few functions that is incompatible with JIT compilation (since V0 is fixed).
         """
-
         cmbr = self # Aliases
 
         if cmbr.V0 == -1:

@@ -40,7 +40,7 @@ from hrap.tank    import *
 from hrap.grain   import *
 from hrap.chamber import *
 from hrap.nozzle  import *
-from hrap.units   import _in, _ft
+from hrap.units   import _in, _ft, unit_conversions, inv_unit_conversions
 
 hrap_version = version('hrap')
 hrap_root = Path(imp_files('hrap')) # HRAP install root
@@ -70,6 +70,19 @@ window = None
     # return static_file(filename, root=html_root/'assets')
 
 from nicegui.element import Element
+
+# HTML code to nicely display units, to access use unit_html_names.get(unit_type,{}).get(unit,unit)
+_unit_html_names = {
+    'area': {'mm2': 'mm<sup>2</sup>', 'in2': 'in<sup>2</sup>'},
+    'temperature': {'C': '&deg;C', 'F': '&deg;F'},
+}
+get_unit_html_name = lambda unit_type, unit, _names=_unit_html_names: _names.get(unit_type,{}).get(unit,unit)
+# for unit_type in unit_conversions:
+#     if unit_type not in unit_html_names:
+#         unit_html_names[unit_type] = { }
+#     for unit in unit_conversions[unit_type]:
+#         if unit not in unit_html_names[unit_type]:
+#             unit_html_names[unit_type][unit] = unit
 
 # @binding.bindable_dataclass
 class TankSlider(Element, component='components/Tank.vue'):

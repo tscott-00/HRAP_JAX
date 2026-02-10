@@ -88,7 +88,7 @@ def u_grain(s, x, xmap):
 #     return s, x
 
 def make_circle_shape(**kwargs):
-    def fcircle(d, s, x, xmap):
+    def circle_d2a(d, s, x, xmap):
         return np.pi * (s['grn_shape_ID'] + 2*d)
     
     def preprs(s, x, xmap):
@@ -195,3 +195,5 @@ def make_shiftOF_grain(shape, **kwargs):
         # The user-specified static and initial dynamic variables
         **kwargs,
     )
+
+

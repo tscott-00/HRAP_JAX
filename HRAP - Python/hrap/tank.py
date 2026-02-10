@@ -24,7 +24,7 @@ from dataclasses import field
 import jax
 import jax.numpy as jnp
 from jax.lax import cond
-from tracept import tclass, tmethod, Placeholder, Dynamic, Derivative
+from tracept import tclass, tmethod, Dynamic, Derivative
 
 from hrap.fluid import SatFluid, Gas
 
@@ -103,7 +103,7 @@ class Injector:
     vap_model: str       = 'Real Gas'       #: masss flow rate model for vapor phase, 'Real Gas' (default) or 'Incompressible'
     liq_model: str       = 'Incompressible' #: masss flow rate model for liquid phase, currently only 'Incompressible' is supported
     # Dependent variables
-    mdot:      jax.Array = Dynamic()        #: mass flow rate
+    mdot:      Dynamic  = None       #: mass flow rate
 
     @tmethod
     def __call__(self, tnk, fld, cmbr):
@@ -137,10 +137,10 @@ class Injector:
 @tclass(static_attrnames=['S'])
 class Vent:
     # Fixed variables
-    S:    int       = 0         #: vent mode, 0 for no vent, 1 for externally vented, 2 for internally plumbed
-    CdA:  float     = 0.0       #: coefficient of discharge times total flow area
+    S:    int       = 0   #: vent mode, 0 for no vent, 1 for externally vented, 2 for internally plumbed
+    CdA:  float     = 0.0 #: coefficient of discharge times total flow area
     # Dependent variables
-    mdot: jax.Array = Dynamic() #: mass flow rate
+    mdot: Dynamic = None  #: mass flow rate
 
     @tmethod
     def __call__(self, tnk, fld, env):
@@ -164,19 +164,19 @@ class SatTank:
     vnt: Vent
     # TODO: dynamics should be able to take defaults
     # Integrated variables
-    T:    jax.Array = Placeholder()   #: temperature
-    Tdot: jax.Array = Derivative('T') #: temperature rate
-    m:    jax.Array = Placeholder()   #: mass
-    mdot: jax.Array = Derivative('m') #: mass rate
+    T:    Dynamic #: temperature
+    m:    Dynamic #: mass
+    Tdot: Derivative('T') = None #: temperature rate
+    mdot: Derivative('m') = None #: mass rate
     # Dependent variables
-    m_l:      jax.Array = Dynamic() #: mass of liquid
-    m_v:      jax.Array = Dynamic() #: mass of vapor
-    rho_l:    jax.Array = Dynamic() #: density of liquid
-    rho_v:    jax.Array = Dynamic() #: density of vapor
-    P:        jax.Array = Dynamic() #: pressure
-    Pdot:     jax.Array = Dynamic() #: pressure rate
-    Pdot_sum: jax.Array = Dynamic() #: sum of historical pressure rates
-    Pdot_N:   jax.Array = Dynamic() #: number of historical pressure rates included in sum
+    m_l:      Dynamic = None #: mass of liquid
+    m_v:      Dynamic = None #: mass of vapor
+    rho_l:    Dynamic = None #: density of liquid
+    rho_v:    Dynamic = None #: density of vapor
+    P:        Dynamic = None #: pressure
+    Pdot:     Dynamic = None #: pressure rate
+    Pdot_sum: Dynamic = None #: sum of historical pressure rates
+    Pdot_N:   Dynamic = None #: number of historical pressure rates included in sum
 
     @classmethod
     def new(cls, get_sat_props: Callable, V: float, T0: float, m0: float, inj: Injector, vnt: Vent = Vent()):
@@ -192,7 +192,7 @@ class SatTank:
         Returns:
           the new tank
         """
-        return cls(V=V, get_sat_props=get_sat_props, inj=inj, vnt=vnt, T=Dynamic(T0), m=Dynamic(m0))
+        return cls(V=V, get_sat_props=get_sat_props, inj=inj, vnt=vnt, T=T0, m=m0)
 
     @tmethod
     def __call__(self, cmbr, env):
