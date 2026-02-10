@@ -23,6 +23,7 @@ dependencies = [
 	"scikit-image",
 	"nicegui",
 	"coolprop",
+	# TODO: Tracept WITH version
 ]
 
 requires-python = ">= 3.10"

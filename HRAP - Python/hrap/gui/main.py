@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# pip instasll --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
+# pip install --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
 
 import hrap
 
@@ -245,9 +245,6 @@ def main(is_direct_call=False):
     # window = webview.create_window('HRAP', str(hrap_root/'gui'/'frontend'/'dist'/'index.html'))
     
     # https://nicegui.io/documentation/page_layout
-    
-    
-
     
     # ui.run(root=root, title='HRAP', favicon='🚀', reload=is_direct_call, uvicorn_reload_includes='*.py,*.js,*.vue')
     if args.host:

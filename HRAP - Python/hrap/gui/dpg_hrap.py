@@ -958,7 +958,7 @@ def main():
                     'step': 1E-2,
                     'decimal': 6,
                 })
-                make_param('Oxidizer Position (from top)', {
+                make_param('Oxidizer Position (from top to top)', {
                     'type': float, 'units': 'mm',
                     'tag': 'ox_pos',
                     'min': 0.0,
@@ -966,7 +966,7 @@ def main():
                     'step': 1E-2,
                     'decimal': 6,
                 })
-                make_param('Grain Position (from top)', {
+                make_param('Grain Position (from top to top)', {
                     'type': float, 'units': 'mm',
                     'tag': 'grn_pos',
                     'min': 0.0,
