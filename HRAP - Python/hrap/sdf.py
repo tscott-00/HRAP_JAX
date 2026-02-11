@@ -1,11 +1,12 @@
-# Purpose: Provide signed distance function (SDF) utilities for use in regression of arbitrary grain geometries
+
 # Authors: Thomas A. Scott
+
+"""Provide signed distance function (SDF) utilities for use in regression of arbitrary grain geometries."""
 
 import numpy as np
 
 def clean_points(p: np.ndarray):
-    """
-    Takes in a disordered array of points and orders them counterclockwise, removing duplicates.
+    """Takes in a disordered array of points and orders them counterclockwise, removing duplicates.
 
     Args:
         p (np.ndarray): An array of shape (N, 2) representing the points.
@@ -28,8 +29,7 @@ def clean_points(p: np.ndarray):
     return usp
 
 def sd_poly(v: np.ndarray, p: np.ndarray) -> np.ndarray:
-    """
-    Calculates the signed distance to a 2D polygon. The polygon may be self-intersecting.
+    """Calculates the signed distance to a 2D polygon. The polygon may be self-intersecting.
     Ported from Inigo Quilez's GLSL https://iquilezles.org/articles/distfunctions2d/.
 
     Args:
@@ -55,8 +55,7 @@ def sd_poly(v: np.ndarray, p: np.ndarray) -> np.ndarray:
     return s * d
 
 def area_poly(v: np.ndarray) -> float:
-    """
-    Calculates the area of a 2D polygon using shoelace formula. The polygon may be self-intersecting.
+    """Calculates the area of a 2D polygon using shoelace formula. The polygon may be self-intersecting.
 
     Args:
         v (np.ndarray): An array of shape (N, 2) representing the counterclockwise polygon vertices.
