@@ -1,5 +1,5 @@
 # Purpose: Demonstrate API for arbitrary saturated fluids and non-circular ports with a LOX plastisol hybrid star grain example
-# Authors: Thomas A. Scott, Roman Dickerson
+# Authors: Thomas A. Scott
 
 import scipy
 import numpy as np
