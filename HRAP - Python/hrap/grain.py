@@ -1,10 +1,10 @@
 # Purpose: Model regression of motor grains
-# Authors: Thomas A. Scott, Roman Dickerson
+# Authors: Thomas A. Scott
 
 import numpy as np
 import jax.numpy as jnp
 from jax.lax import cond
-from functools import partial
+from functools import partial, reduce
 from skimage import measure
 import interpax
 from hrap.core import store_x, make_part
@@ -85,24 +85,38 @@ def make_star_vertices(grn_ID, grn_TD, N_tip):
     grn_xy = np.stack([grn_r*np.cos(grn_t), grn_r*np.sin(grn_t)], axis=1)
     return grn_xy
 
-def bake_d2a(grn_OD, grn_xy, Nx, Nd):
+def bake_d2a(grn_OD, ports_xy, Nx, Nd):
+    """Use description of ports to precompute the regression behavor of the grain
+
+    Args:
+      grn_OD: outer diameter of the grain
+      ports_xy: list of or single array of shape (N,2)
+        each array can have a different leading dimension,
+        each describes a closed loop representing an initial port,
+        each cannot intersect itself or others upon specification.
+      Nx: spatial resolution
+      Nd: regression resolution
+    Returns:
+      initial cross section area, tabulated regression distance (d2a input), tabulated exposed arc length (d2a output), list of contous for plotting
     """
-    Nx spatial resolution
-    Nd regression resolution
-    """
+    if type(ports_xy) not in [list, tuple]: ports_xy = [ports_xy]
+
     sdf_x, sdf_y = np.meshgrid(*[((np.arange(Nx)+0.5)/Nx - 0.5)*grn_OD]*2,indexing='ij')
-    sdf_xy = np.stack([sdf_x.ravel(), sdf_y.ravel()], axis=1) # 
-    sdf_v = sdf.sd_poly(grn_xy, sdf_xy)
+    sdf_xy = np.stack([sdf_x.ravel(), sdf_y.ravel()], axis=1)
+    sdf_v = reduce(lambda sdf1,sdf2: np.minimum(sdf1,sdf2), [sdf.sd_poly(port_xy, sdf_xy) for port_xy in ports_xy])
     is_outside = sdf_xy[:,0]**2+sdf_xy[:,1]**2 > (grn_OD/2)**2
     R = np.max(sdf_v[~is_outside]) # Distance from initial grain to outer wall
     sdf_v = sdf_v.reshape((Nx,Nx)) # Unflatten
-    A0 = np.pi/4*grn_OD**2 - sdf.area_poly(grn_xy)
+    A0 = np.pi/4*grn_OD**2 - reduce(lambda v1,v2: v1+v2, [sdf.area_poly(port_xy) for port_xy in ports_xy])
 
     grn_d2a = np.zeros(Nd)
     grn_d = np.arange(Nd)/(Nd-1)*R
-    grn_xy1 = np.roll(grn_xy,1,axis=0) # Previous vertices
-    grn_d2a[0] = np.sum(np.sqrt((grn_xy[:,0]-grn_xy1[:,0])**2 + (grn_xy[:,1]-grn_xy1[:,1])**2))
-    all_contours = [np.append(grn_xy, [grn_xy[0,:]], axis=0)]
+    # grn_xy1 = np.roll(grn_xy,1,axis=0) # Previoius vertices
+    # grn_d2a[0] = np.sum(np.sqrt((grn_xy[:,0]-grn_xy1[:,0])**2 + (grn_xy[:,1]-grn_xy1[:,1])**2))
+    grn_d2a[0] = reduce(lambda v1,v2: v1+v2, [np.sum(np.sqrt(np.sum((port_xy-np.roll(port_xy,1,axis=0))**2,axis=-1))) for port_xy in ports_xy])
+    # Use original specification for initial grain state
+    all_contours = [np.append(port_xy, [port_xy[0,:]], axis=0) for port_xy in ports_xy]
+    # For each remaining regression query point, use sdf detection
     for i in range(1, Nd):
         contours = measure.find_contours(sdf_v, i/(Nd-1)*R)
         for contour in contours:

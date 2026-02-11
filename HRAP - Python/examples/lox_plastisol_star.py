@@ -48,35 +48,44 @@ print('Baking LOX saturated property curves...')
 get_sat_lox_props = fluid.bake_sat_coolprop('Oxygen', np.linspace(75.0, 150.0, 20))
 
 print('Baking grain geometry')
-# Define star using inner diameter, tip diameter, and number of tips; then bake into regress distance to exposed arc area curve fit
-grn_ID, grn_TD, grn_OD, N_tip = 2.0*_in, 3.5*_in, 4.5*_in, 6
-grn_xy = make_star_vertices(grn_ID, grn_TD, N_tip)
-grn_A0, grn_d, grn_d2a, all_contours = bake_d2a(grn_OD, grn_xy, Nx=64, Nd=16)
+
+# Multi-port geometry, note the ports cannot initially overlap
+#   star is specified using inner diameter, tip diameter, and number of tips
+port_ID, port_TD, grn_OD, N_tip = 0.5*_in, 1.0*_in, 4.5*_in, 5
+dupe_r, dupe_N = 0.75*_in, 3
+one_port_xy = make_star_vertices(port_ID, port_TD, N_tip)
+ports_xy = [one_port_xy + dupe_r*np.array([np.cos(th), np.sin(th)])[None,:] for th in np.linspace(0.0, 2*np.pi, dupe_N, endpoint=False)]
+
+# Alternative (uncomment to use) single port star
+# port_ID, port_TD, grn_OD, N_tip = 2.0*_in, 3.5*_in, 4.5*_in, 5
+# ports_xy = [make_star_vertices(port_ID, port_TD, N_tip)]
+
+# Bake into regress distance to exposed arc area curve fit
+grn_A0, grn_d, grn_d2a, all_contours = bake_d2a(grn_OD, ports_xy, Nx=64, Nd=32)
 d2a_curve = interpax.Interpolator1D(grn_d, grn_d2a, method='akima')
 
-# fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(14,7))
-# axs = np.array(axs).ravel()
-# Nd_plt = 128
-# plt_grn_xy = np.append(grn_xy, [grn_xy[0,:]], axis=0)
-# plt_t = np.linspace(0.0, 2*np.pi, 64)
-# plt_d = np.arange(Nd_plt)/(Nd_plt-1)*grn_d[-1]
-# eq_r = grn_d2a[0]/(2*np.pi)
-# eq_d = np.arange(Nd_plt)/(Nd_plt-1)*(grn_OD/2 - eq_r)
+fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(14,7))
+axs = np.array(axs).ravel()
+Nd_plt = 128
+plt_ports_xy = [np.append(port_xy, [port_xy[0,:]], axis=0) for port_xy in ports_xy]
+plt_t = np.linspace(0.0, 2*np.pi, 64)
+plt_d = np.arange(Nd_plt)/(Nd_plt-1)*grn_d[-1]
+eq_r = grn_d2a[0]/(2*np.pi)
+eq_d = np.arange(Nd_plt)/(Nd_plt-1)*(grn_OD/2 - eq_r)
 
-# for contour in all_contours:
-    # axs[0].plot(contour[:,0], contour[:,1], color='black')
-# axs[0].plot(plt_grn_xy[:,0], plt_grn_xy[:,1], color='black', linestyle='dashed')
-# axs[0].plot(np.cos(plt_t)*grn_OD/2, np.sin(plt_t)*grn_OD/2, color='black', linestyle='dashed')
-# axs[0].plot(np.cos(plt_t)*eq_r, np.sin(plt_t)*eq_r, color='blue', linestyle='dashed', label='equivalent diameter')
-# axs[0].legend(loc='upper right')
+for contour in all_contours:
+    axs[0].plot(contour[:,0], contour[:,1], color='black')
+axs[0].plot(np.cos(plt_t)*grn_OD/2, np.sin(plt_t)*grn_OD/2, color='black', linestyle='dashed')
+axs[0].plot(np.cos(plt_t)*eq_r, np.sin(plt_t)*eq_r, color='blue', linestyle='dashed', label='equivalent diameter')
+axs[0].legend(loc='upper right')
 
-# axs[1].plot(plt_d, d2a_curve(plt_d), label='star')
-# axs[1].scatter(grn_d, grn_d2a)
-# axs[1].plot(np.append(eq_d, eq_d[-1]), np.append(2*np.pi*(eq_r + eq_d),0.0), label='circular w/ equivalent diameter')
-# axs[1].legend(loc='upper right')
-# axs[1].set_xlabel('Regressed Distance [m]')
-# axs[1].set_ylabel('Exposed Arc Length [m]')
-# plt.show()
+axs[1].plot(plt_d, d2a_curve(plt_d), label='star')
+axs[1].scatter(grn_d, grn_d2a)
+axs[1].plot(np.append(eq_d, eq_d[-1]), np.append(2*np.pi*(eq_r + eq_d),0.0), label='circular w/ equivalent diameter')
+axs[1].legend(loc='upper right')
+axs[1].set_xlabel('Regressed Distance [m]')
+axs[1].set_ylabel('Exposed Arc Length [m]')
+plt.show()
 
 
 
@@ -87,11 +96,9 @@ tnk = make_sat_tank(
     inj_CdA = 0.22 * (np.pi/4 * 0.5**2 * _in**2),
     m_ox = 3.0, # TODO: init limit
     T = 125,
+    inj_vap_model = StaticVar('Real Gas'),
 )
 
-# shape = make_circle_shape(
-    # ID = 2.5 * _in,
-# )
 shape = make_arbitrary_shape(
     d2a_curve,
     A0 = grn_A0,
