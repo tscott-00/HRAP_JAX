@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Doesn't work, needs to be python subfolder...
 # pip install --force-reinstall git+https://github.com/tscott-00/HRAP_JAX@webview
 
 import hrap
