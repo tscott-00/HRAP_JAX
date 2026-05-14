@@ -235,11 +235,11 @@ def prep_chem(allow_rho_est=True):
 
 def update_chem(chem_ox, chem_fu, sum_fu_mf=1.0):
     chem_Pc, chem_OF = np.linspace(10*units._atm, 50*units._atm, 10), np.linspace(1.0, 10.0, 20)
-    chem_k, chem_M, chem_T = [np.zeros((chem_Pc.size, chem_OF.size)) for i in range(3)]
+    chem_k, chem_M, chem_T = [np.zeros((chem_OF.size, chem_Pc.size)) for i in range(3)]
     internal_state = None
     internal_state_row = None
-    for j, OF in enumerate(chem_OF):
-        for i, Pc in enumerate(chem_Pc):
+    for j, Pc in enumerate(chem_Pc):
+        for i, OF in enumerate(chem_OF):
             o = OF / (1 + OF) # o/f = OF, o+f=1 => o=OF/(1 + OF)
             # Use last Pc as guess for fixed OF, last OF first PC when starting a new OF
             _internal_state = internal_state_row if i == 0 else internal_state

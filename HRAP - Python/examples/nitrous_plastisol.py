@@ -33,12 +33,12 @@ plastisol = chem.make_basic_reactant(
 )
 comb = chem.ChemSolver([hrap_root/'thermo.dat', plastisol])
 chem_Pc, chem_OF = np.linspace(10*_atm, 50*_atm, 10), np.linspace(1.0, 10.0, 20)
-chem_k, chem_M, chem_T = [np.zeros((chem_Pc.size, chem_OF.size)) for i in range(3)]
+chem_k, chem_M, chem_T = [np.zeros((chem_OF.size, chem_Pc.size)) for i in range(3)]
 ox, fu_1, fu_2 = 'N2O(L),298.15K', 'Plastisol-362', 'AL(cr)'
 mfrac_al = 0.2
 internal_state = None
-for j, OF in enumerate(chem_OF):
-    for i, Pc in enumerate(chem_Pc):
+for j, Pc in enumerate(chem_Pc):
+    for i, OF in enumerate(chem_OF):
         # print('OF={OF}, Pc={Pc}atm'.format(OF=OF, Pc=Pc/_atm))
         o = OF / (1 + OF) # o/f = OF, o+f=1 => o=OF/(1 + OF)
         flame, internal_state = comb.solve(Pc, {ox: o, fu_1: (1-mfrac_al)*(1-o), fu_2: mfrac_al*(1-o)}, max_iters=150, internal_state=internal_state)
@@ -198,7 +198,9 @@ axs[7].plot(np.linspace(0.0, T, N_t), cmbr['T'], label='cmbr T')
 axs[7].legend()
 
 # axs[8].plot(np.linspace(0.0, T, N_t), cmbr['k'], label='cmbr k')
-axs[8].plot(np.linspace(0.0, T, N_t), cmbr['V0'] - grn['V'], label='Empty cmbr V')
+# axs[8].plot(np.linspace(0.0, T, N_t), cmbr['V0'] - grn['V'], label='Empty cmbr V')
+axs[8].plot(np.linspace(0.0, T, N_t), cmbr['OF'], label='O/F')
+
 # axs[8].plot(np.linspace(0.0, T, N_t), grn['V'], label='grain volume')
 # axs[8].plot(np.linspace(0.0, T, N_t), cmbr['Pdot'], label='Pc dot')
 # axs[8].plot(np.linspace(0.0, T, N_t), grn['Vdot'], label='grain V dot')
